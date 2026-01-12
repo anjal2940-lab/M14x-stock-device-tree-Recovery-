@@ -25,15 +25,18 @@ BOARD_KERNEL_TAGS_OFFSET := 0x00000000
 
 # Kernel - Prebuilt Paths
 TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel
+# This tells the system to look in the folder for .dtb files
 BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)/prebuilt/dtb
 BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/prebuilt/dtbo.img
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 # Boot Image Arguments
+# Note: --dtb $(TARGET_PREBUILT_DTB) is REMOVED here. 
+# The build system adds the --dtb argument automatically when 
+# BOARD_INCLUDE_DTB_IN_BOOTIMG is set to true.
 BOARD_MKBOOTIMG_ARGS := --header_version $(BOARD_BOOTIMG_HEADER_VERSION)
 BOARD_MKBOOTIMG_ARGS += --ramdisk_offset $(BOARD_RAMDISK_OFFSET)
 BOARD_MKBOOTIMG_ARGS += --tags_offset $(BOARD_KERNEL_TAGS_OFFSET)
-BOARD_MKBOOTIMG_ARGS += --dtb $(TARGET_PREBUILT_DTB)
 
 # Partitions
 BOARD_FLASH_BLOCK_SIZE := 262144
