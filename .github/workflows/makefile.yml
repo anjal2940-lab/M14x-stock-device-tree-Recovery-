@@ -1,10 +1,10 @@
-name: Decompress and Fix DTB
+name: Extract Raw DTB from Container
 
 on:
   workflow_dispatch:
 
 jobs:
-  decompress:
+  extract:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Branch
@@ -13,34 +13,48 @@ jobs:
           ref: standardized-tree
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Tools
+        run: sudo apt-get install -y python3
+
       - name: Extract Raw DTB
         run: |
-          cd prebuilt/dtb
-          
-          # Rename to identify as compressed
-          mv dtb.img dtb.img.lz4
-          
-          # Attempt decompression using lz4 (common for Samsung)
-          # If lz4 fails, we will try gunzip
-          sudo apt-get install -y lz4
-          lz4 -d dtb.img.lz4 dtb.img || true
-          
-          # Check if the result is now a valid DTB
-          MAGIC=$(hexdump -n 4 -e '"%02x"' dtb.img)
+          # This python script scans the file for the d00dfeed magic number
+          # and clips the file to start exactly there.
+          python3 << 'EOF'
+          import os
+
+          input_file = "prebuilt/dtb/dtb.img"
+          output_file = "prebuilt/dtb/dtb_raw.img"
+          magic = b'\xd0\x0d\xfe\xed'
+
+          if not os.path.exists(input_file):
+              print(f"Error: {input_file} not found")
+              exit(1)
+
+          with open(input_file, "rb") as f:
+              data = f.read()
+              
+          offset = data.find(magic)
+          if offset != -1:
+              print(f"✅ Found DTB Magic at offset: {offset}")
+              with open(output_file, "wb") as f_out:
+                  f_out.write(data[offset:])
+              print("✅ Extracted raw DTB to dtb_raw.img")
+          else:
+              print("❌ DTB Magic Number (d00dfeed) NOT FOUND in the file!")
+              exit(1)
+          EOF
+
+      - name: Final Verification
+        run: |
+          # Verify the new file magic
+          MAGIC=$(hexdump -n 4 -e '"%02x"' prebuilt/dtb/dtb_raw.img)
+          echo "New file magic: $MAGIC"
           if [ "$MAGIC" == "d00dfeed" ]; then
-            echo "✅ Successfully decompressed! New Magic: $MAGIC"
-            rm dtb.img.lz4
+            mv prebuilt/dtb/dtb_raw.img prebuilt/dtb/dtb.img
           else
-            echo "❌ LZ4 failed or Magic still wrong ($MAGIC). Trying GZIP..."
-            mv dtb.img.lz4 dtb.img.gz
-            gunzip -f dtb.img.gz || true
-            MAGIC_GZ=$(hexdump -n 4 -e '"%02x"' dtb.img)
-            if [ "$MAGIC_GZ" == "d00dfeed" ]; then
-                echo "✅ Successfully decompressed via GZIP!"
-            else
-                echo "❌ Fatal: File is not a standard compressed DTB. Found: $MAGIC_GZ"
-                exit 1
-            fi
+            echo "Extraction failed to produce valid magic."
+            exit 1
           fi
 
       - name: Commit Fixed DTB
@@ -48,5 +62,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add prebuilt/dtb/dtb.img
-          git commit -m "Fix: Decompressed dtb.img to raw FDT format"
+          git commit -m "Fix: Extracted raw DTB from AVB container"
           git push origin standardized-tree
