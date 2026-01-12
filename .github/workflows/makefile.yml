@@ -1,31 +1,45 @@
-      - name: Fix DTB Folder Structure and BoardConfig
+name: Fix Device Tree Structure
+
+on:
+  workflow_dispatch: # Allows you to run this manually
+
+jobs:
+  fix-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reorganize Prebuilts and Update BoardConfig
         run: |
-          # Define the path to your device tree
-          DEV_PATH="device/samsung/m14x"
+          # 1. Create the required DTB folder structure
+          mkdir -p prebuilt/dtb
           
-          echo "Step 1: Creating prebuilt/dtb directory..."
-          mkdir -p $DEV_PATH/prebuilt/dtb
-          
-          echo "Step 2: Moving prebuilt files to correct locations..."
-          # Move dtb.img into the new folder if it exists in the root of prebuilt
-          if [ -f "$DEV_PATH/prebuilt/dtb.img" ]; then
-            mv $DEV_PATH/prebuilt/dtb.img $DEV_PATH/prebuilt/dtb/dtb.img
-            echo "Moved dtb.img to $DEV_PATH/prebuilt/dtb/"
-          fi
-          
-          echo "Step 3: Updating BoardConfig.mk variables..."
-          # Remove any existing DTB variable lines to prevent duplicates
-          sed -i '/TARGET_PREBUILT_DTB/d' $DEV_PATH/BoardConfig.mk
-          sed -i '/BOARD_PREBUILT_DTBIMAGE_DIR/d' $DEV_PATH/BoardConfig.mk
-          
-          # Add the correct directory variable
-          # We use the DTBIMAGE_DIR variable which Ninja expects for prebuilt DTBs
-          echo "BOARD_PREBUILT_DTBIMAGE_DIR := \$(DEVICE_PATH)/prebuilt/dtb" >> $DEV_PATH/BoardConfig.mk
-          
-          # Ensure the inclusion flag is set
-          if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" $DEV_PATH/BoardConfig.mk; then
-            echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> $DEV_PATH/BoardConfig.mk
+          # 2. Move dtb.img into the subdirectory if it's in the root
+          if [ -f "prebuilt/dtb.img" ]; then
+            mv prebuilt/dtb.img prebuilt/dtb/dtb.img
+            echo "Moved dtb.img to prebuilt/dtb/"
           fi
 
-          echo "Fix applied successfully. Current BoardConfig Kernel Section:"
-          grep -E "DTB|KERNEL" $DEV_PATH/BoardConfig.mk
+          # 3. Clean and Update BoardConfig.mk
+          # Remove the old specific file path line
+          sed -i '/TARGET_PREBUILT_DTB :=/d' BoardConfig.mk
+          
+          # Remove existing DIR variable if present to avoid duplicates
+          sed -i '/BOARD_PREBUILT_DTBIMAGE_DIR :=/d' BoardConfig.mk
+          
+          # Add the correct Directory variable for the Ninja build system
+          # This must point to the folder containing the DTB
+          sed -i '/TARGET_PREBUILT_KERNEL/a BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)/prebuilt/dtb' BoardConfig.mk
+          
+          echo "BoardConfig.mk updated with correct DTB directory."
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Fix: Reorganize DTB structure and update BoardConfig for Ninja" || echo "No changes to commit"
+          git push
