@@ -1,4 +1,4 @@
-name: Fix Standardized Device Tree
+name: Fix Standardized M14x Tree
 
 on:
   workflow_dispatch:
@@ -10,42 +10,45 @@ jobs:
       - name: Checkout Standardized Branch
         uses: actions/checkout@v4
         with:
+          ref: standardized-tree
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Reorganize and Patch BoardConfig
         run: |
-          echo "Checking repository structure..."
-          ls -F
-
-          # 1. Create the DTB directory in the repo root
+          # 1. Create the prebuilt/dtb folder structure
           mkdir -p prebuilt/dtb
           
-          # 2. Move dtb.img if it is sitting in the root of prebuilt/
+          # 2. Move the dtb.img into the folder
           if [ -f "prebuilt/dtb.img" ]; then
             mv prebuilt/dtb.img prebuilt/dtb/dtb.img
-            echo "Moved dtb.img -> prebuilt/dtb/dtb.img"
+            echo "Moved dtb.img to prebuilt/dtb/dtb.img"
           fi
 
-          # 3. Patch BoardConfig.mk in the root
+          # 3. Update BoardConfig.mk
           if [ -f "BoardConfig.mk" ]; then
-            # Clean out old variables
+            # Remove old DTB paths
             sed -i '/TARGET_PREBUILT_DTB :=/d' BoardConfig.mk
             sed -i '/BOARD_PREBUILT_DTBIMAGE_DIR :=/d' BoardConfig.mk
             
-            # Insert the new directory variable after the Kernel path
-            # Standardized trees use $(DEVICE_PATH) which is set by the builder
+            # Insert the new directory variable after the Kernel line
+            # This uses the $(DEVICE_PATH) variable which is set by the build system
             sed -i '/TARGET_PREBUILT_KERNEL/a BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)/prebuilt/dtb' BoardConfig.mk
             
-            echo "BoardConfig.mk patched successfully."
+            # Ensure the DTB inclusion flag is set
+            if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk; then
+               echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> BoardConfig.mk
+            fi
+            
+            echo "BoardConfig.mk updated for standardized-tree."
           else
-            echo "Error: BoardConfig.mk not found. This doesn't look like a standard branch."
+            echo "Error: BoardConfig.mk not found in root."
             exit 1
           fi
 
-      - name: Commit Fixes to Branch
+      - name: Commit and Push to Standardized Branch
         run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add .
-          git commit -m "Standardize: Move DTB to subdirectory and update BoardConfig" || echo "No changes"
-          git push origin ${{ github.ref_name }}
+          git commit -m "Standardize: Fix DTB pathing and directory structure" || echo "No changes to commit"
+          git push origin standardized-tree
