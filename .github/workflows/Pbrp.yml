@@ -18,14 +18,13 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc
           sudo apt-get clean
-          echo "Storage after cleanup:"
-          df -h /
 
       - name: Install Build Dependencies
         run: |
-          sudo add-apt-repository universe
           sudo apt-get update
-          # Install core build tools and handle the ncurses dependency
+          # Add Focal (20.04) repository to get libncurses5
+          echo "deb http://security.ubuntu.com/ubuntu focal-security main universe" | sudo tee /etc/apt/sources.list.d/focal-security.list
+          sudo apt-get update
           sudo apt-get install -y bc build-essential libncurses5 libncursesw5 \
           zip curl git wget python3 repo libssl-dev libstdc++6 python-is-python3
           
@@ -35,32 +34,26 @@ jobs:
       - name: Sync PBRP Minimal Source
         run: |
           mkdir pb-source && cd pb-source
-          # Depth 1 and -c (current branch) are vital to save disk space
           repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb -b android-12.1 --depth=1
           repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune
-          echo "Storage after sync:"
-          df -h /
 
       - name: Setup M14x Device Tree
         run: |
-          # The path must match your repo structure
           mkdir -p pb-source/device/samsung/m14x
           cp -r extracted/stock_tree/samsung/m14x/* pb-source/device/samsung/m14x/
-          
-          # Check if the tree was copied correctly
-          ls -l pb-source/device/samsung/m14x/BoardConfig.mk
 
       - name: Build PBRP
         run: |
           cd pb-source
-          export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
           lunch pbrp_m14x-userdebug
-          # Build recoveryimage
-          mka recoveryimage -j$(nproc --all)
+          mka pbrp -j$(nproc --all)
 
       - name: Upload Recovery Image
         uses: actions/upload-artifact@v4
         with:
-          name: PBRP-M146B-Recovery
-          path: pb-source/out/target/product/m14x/recovery.img
+          name: PBRP-M14x-Official
+          path: |
+            pb-source/out/target/product/m14x/recovery.img
+            pb-source/out/target/product/m14x/PBRP*.zip
