@@ -22,22 +22,30 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          # Add Focal (20.04) repository to get libncurses5
           echo "deb http://security.ubuntu.com/ubuntu focal-security main universe" | sudo tee /etc/apt/sources.list.d/focal-security.list
           sudo apt-get update
           sudo apt-get install -y bc build-essential libncurses5 libncursesw5 \
-          zip curl git wget python3 repo libssl-dev libstdc++6 python-is-python3
+          zip curl git wget python3 libssl-dev libstdc++6 python-is-python3
+          
+          # FORCE LOCAL REPO INSTALLATION
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          # Prepend ~/bin to PATH so it takes priority over /usr/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
           
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync PBRP Minimal Source
+      - name: Sync PBRP Source
         run: |
+          # Ensure we use the local repo launcher
+          PATH=$HOME/bin:$PATH
           mkdir pb-source && cd pb-source
           repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb -b android-12.1 --depth=1
           repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune
 
-      - name: Setup M14x Device Tree
+      - name: Setup Device Tree
         run: |
           mkdir -p pb-source/device/samsung/m14x
           cp -r extracted/stock_tree/samsung/m14x/* pb-source/device/samsung/m14x/
@@ -50,10 +58,21 @@ jobs:
           lunch pbrp_m14x-userdebug
           mka pbrp -j$(nproc --all)
 
-      - name: Upload Recovery Image
+      - name: Package for Odin (TAR)
+        run: |
+          cd pb-source/out/target/product/m14x/
+          if [ -f recovery.img ]; then
+            tar -cvf PBRP-M14x-Odin.tar recovery.img
+          else
+            echo "recovery.img not found, check build logs."
+            exit 1
+          fi
+
+      - name: Upload Recovery Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PBRP-M14x-Official
+          name: PBRP-Samsung-M14x-Build
           path: |
-            pb-source/out/target/product/m14x/recovery.img
+            pb-source/out/target/product/m14x/PBRP-M14x-Odin.tar
             pb-source/out/target/product/m14x/PBRP*.zip
+            pb-source/out/target/product/m14x/recovery.img
