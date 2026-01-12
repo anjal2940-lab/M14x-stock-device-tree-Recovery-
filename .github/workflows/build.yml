@@ -1,11 +1,7 @@
 name: Extract Device Tree
 
 on:
-  workflow_dispatch: # Allows you to run this manually
-    inputs:
-      img_url:
-        description: 'Direct link to recovery.img'
-        required: true
+  workflow_dispatch:
 
 jobs:
   extract:
@@ -18,22 +14,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y device-tree-compiler python3-pip
-          pip3 install twrpdtgen extract-dtb
+          pip3 install twrpdtgen extract-dtb gdown
 
-      - name: Download Recovery Image
-        run: wget ${{ github.event.inputs.img_url }} -O recovery.img
+      - name: Download Recovery Image from Google Drive
+        run: |
+          # Uses the file ID from your link: 1u-NBV0U_QN2PmYRQLwwIPsSQVRqWQSPI
+          gdown --id 1u-NBV0U_QN2PmYRQLwwIPsSQVRqWQSPI -O recovery.img
 
       - name: Extract DTB and Decompile to DTS
         run: |
           mkdir -p output/dts
           extract-dtb recovery.img -o output/dtb_blobs
-          # Decompile all found DTBs
+          
+          # Decompile all found DTBs into readable text
           for f in output/dtb_blobs/*.dtb; do
             dtc -I dtb -O dts -o "output/dts/$(basename "$f" .dtb).dts" "$f"
           done
 
-      - name: Generate Full TWRP Tree (Optional)
+      - name: Generate TWRP Tree
         run: |
+          # This creates the full folder structure for TWRP building
           python3 -m twrpdtgen recovery.img --output output/twrp_tree || echo "twrpdtgen failed, but DTS extracted."
 
       - name: Upload Results
@@ -41,4 +41,3 @@ jobs:
         with:
           name: extracted-device-tree
           path: output/
-
