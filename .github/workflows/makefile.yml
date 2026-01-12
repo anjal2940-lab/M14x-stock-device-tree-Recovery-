@@ -1,54 +1,50 @@
-name: Fix Standardized M14x Tree
+name: Verify M14x Device Tree
 
 on:
   workflow_dispatch:
 
 jobs:
-  fix-and-commit:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Standardized Branch
+      - name: Checkout Branch
         uses: actions/checkout@v4
         with:
           ref: standardized-tree
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Reorganize and Patch BoardConfig
+      - name: Check Folder Structure
         run: |
-          # 1. Create the prebuilt/dtb folder structure
-          mkdir -p prebuilt/dtb
-          
-          # 2. Move the dtb.img into the folder
-          if [ -f "prebuilt/dtb.img" ]; then
-            mv prebuilt/dtb.img prebuilt/dtb/dtb.img
-            echo "Moved dtb.img to prebuilt/dtb/dtb.img"
-          fi
+          echo "Checking for required prebuilt files..."
+          [ -f "prebuilt/kernel" ] && echo "✅ Kernel found" || echo "❌ Kernel MISSING"
+          [ -f "prebuilt/dtbo.img" ] && echo "✅ DTBO found" || echo "❌ DTBO MISSING"
+          [ -f "prebuilt/dtb/dtb.img" ] && echo "✅ DTB found in subfolder" || echo "❌ DTB MISSING in prebuilt/dtb/"
 
-          # 3. Update BoardConfig.mk
-          if [ -f "BoardConfig.mk" ]; then
-            # Remove old DTB paths
-            sed -i '/TARGET_PREBUILT_DTB :=/d' BoardConfig.mk
-            sed -i '/BOARD_PREBUILT_DTBIMAGE_DIR :=/d' BoardConfig.mk
-            
-            # Insert the new directory variable after the Kernel line
-            # This uses the $(DEVICE_PATH) variable which is set by the build system
-            sed -i '/TARGET_PREBUILT_KERNEL/a BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)/prebuilt/dtb' BoardConfig.mk
-            
-            # Ensure the DTB inclusion flag is set
-            if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk; then
-               echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> BoardConfig.mk
-            fi
-            
-            echo "BoardConfig.mk updated for standardized-tree."
+      - name: Verify DTB Integrity (Magic Number)
+        run: |
+          echo "Checking DTB Magic Number (should be d00dfeed)..."
+          # Read first 4 bytes and convert to hex
+          MAGIC=$(hexdump -n 4 -e '"%02x"' prebuilt/dtb/dtb.img)
+          if [ "$MAGIC" == "d00dfeed" ]; then
+            echo "✅ DTB Magic Number is valid: $MAGIC"
           else
-            echo "Error: BoardConfig.mk not found in root."
+            echo "❌ INVALID DTB! Found: $MAGIC. Expected: d00dfeed"
             exit 1
           fi
 
-      - name: Commit and Push to Standardized Branch
+      - name: Verify Exynos 1330 Compatibility
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add .
-          git commit -m "Standardize: Fix DTB pathing and directory structure" || echo "No changes to commit"
-          git push origin standardized-tree
+          echo "Searching for Exynos 1330 / s5e8535 identifiers..."
+          # Look for the internal Samsung/Exynos platform strings
+          STRINGS=$(strings prebuilt/dtb/dtb.img | grep -iE "s5e8535|erd8535|exynos1330" | sort -u)
+          if [ ! -z "$STRINGS" ]; then
+            echo "✅ Found matching platform strings:"
+            echo "$STRINGS"
+          else
+            echo "❌ No matching Exynos 1330 strings found in DTB!"
+            exit 1
+          fi
+
+      - name: Check BoardConfig Syntax
+        run: |
+          echo "Verifying BoardConfig.mk variables..."
+          grep -E "BOARD_PREBUILT_DTBIMAGE_DIR|BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk
