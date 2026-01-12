@@ -1,4 +1,4 @@
-name: Extract Device Tree
+name: Extract Device Tree from MediaFire
 
 on:
   workflow_dispatch:
@@ -13,31 +13,44 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y device-tree-compiler python3-pip
-          pip3 install twrpdtgen extract-dtb gdown
+          sudo apt-get install -y device-tree-compiler python3-pip curl
+          pip3 install twrpdtgen extract-dtb
 
-      - name: Download Recovery Image from Google Drive
+      - name: Download from MediaFire
         run: |
-          # Uses the file ID from your link: 1u-NBV0U_QN2PmYRQLwwIPsSQVRqWQSPI
-          gdown --id 1u-NBV0U_QN2PmYRQLwwIPsSQVRqWQSPI -O recovery.img
+          # The specific link you provided
+          URL="https://www.mediafire.com/file/qj8dl57ep3oidu3/recovery.img/file?dkey=l6wk15xrxwn&r=187"
+          
+          # Scrape the direct download link from the page
+          DIRECT_LINK=$(curl -sL "$URL" | grep -oE 'https?://download[^"]+' | head -n 1)
+          
+          echo "Direct link found: $DIRECT_LINK"
+          curl -L "$DIRECT_LINK" -o recovery.img
 
-      - name: Extract DTB and Decompile to DTS
+      - name: Extract and Decompile
         run: |
           mkdir -p output/dts
+          # Extract the binary DTB blobs
           extract-dtb recovery.img -o output/dtb_blobs
           
-          # Decompile all found DTBs into readable text
+          # Check if extraction was successful
+          if [ -z "$(ls -A output/dtb_blobs 2>/dev/null)" ]; then
+             echo "Error: No DTB blobs found. The image might be headerless or encrypted."
+             exit 1
+          fi
+
+          # Decompile all found DTBs to readable .dts text
           for f in output/dtb_blobs/*.dtb; do
             dtc -I dtb -O dts -o "output/dts/$(basename "$f" .dtb).dts" "$f"
           done
 
       - name: Generate TWRP Tree
         run: |
-          # This creates the full folder structure for TWRP building
-          python3 -m twrpdtgen recovery.img --output output/twrp_tree || echo "twrpdtgen failed, but DTS extracted."
+          # Automatically build the TWRP folder structure
+          python3 -m twrpdtgen recovery.img --output output/twrp_tree || echo "twrpdtgen skipped."
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: extracted-device-tree
+          name: device-tree-results
           path: output/
