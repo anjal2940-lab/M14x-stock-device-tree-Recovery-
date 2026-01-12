@@ -2,7 +2,7 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64bit.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 
-# Inherit PBRP common bits (The Fix for your error)
+# Inherit PBRP common bits - FIX: Correct path for Android 12.1
 $(call inherit-product, vendor/pb/config/common.mk)
 
 # Inherit from m14x device
