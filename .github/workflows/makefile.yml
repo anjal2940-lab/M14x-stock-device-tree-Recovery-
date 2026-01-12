@@ -1,0 +1,42 @@
+name: PBRP M14 Build with Auto-Fix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v4
+        with:
+          path: device/samsung/m14x
+
+      - name: Restructure Folders and Fix BoardConfig
+        run: |
+          cd device/samsung/m14x
+          # 1. Create the required DTB directory structure
+          mkdir -p prebuilt/dtb
+          
+          # 2. Move the DTB image if it exists in the old location
+          if [ -f "prebuilt/dtb.img" ]; then
+            mv prebuilt/dtb.img prebuilt/dtb/dtb.img
+            echo "Successfully moved dtb.img to prebuilt/dtb/"
+          fi
+
+          # 3. Update BoardConfig.mk automatically using sed
+          # Replace the old DTB variable with the new Directory variable
+          sed -i 's/TARGET_PREBUILT_DTB := .*/BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)\/prebuilt\/dtb/g' BoardConfig.mk
+          
+          # Ensure BOARD_INCLUDE_DTB_IN_BOOTIMG is set to true
+          if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk; then
+            echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> BoardConfig.mk
+          fi
+
+      - name: Build PBRP
+        uses: PitchBlackRecoveryProject/pbrp-build-action@main
+        with:
+          manifest_url: 'https://github.com/PitchBlackRecoveryProject/manifest_pb'
+          manifest_branch: 'android-12.1'
+          device_code: 'm14x'
+          build_target: 'recovery'
