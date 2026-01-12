@@ -1,0 +1,91 @@
+name: PBRP Finalize and Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pbrp-process:
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Comprehensive PBRP Conversion
+        run: |
+          # The exact path from your repo
+          DT_PATH="extracted/stock_tree/samsung/m14x"
+          
+          echo "Checking path: $DT_PATH"
+          if [ ! -d "$DT_PATH" ]; then
+            echo "Error: Path not found!"
+            exit 1
+          fi
+
+          # 1. Rename the main product makefile
+          mv $DT_PATH/omni_m14x.mk $DT_PATH/pbrp_m14x.mk || true
+          
+          # 2. Update all internal strings (omni -> pbrp)
+          find $DT_PATH -type f \( -name "*.mk" -o -name "*.sh" -o -name "*.bp" -o -name "AndroidProducts.mk" \) -exec sed -i 's/omni_/pbrp_/g' {} +
+          
+          # 3. Update inheritance to use PBRP instead of Omni
+          sed -i 's|vendor/omni/config/common.mk|vendor/utils/config/pbrp.mk|g' $DT_PATH/pbrp_m14x.mk
+
+          # 4. Inject PBRP specific flags into BoardConfig.mk
+          # We check if they already exist to avoid double-appending
+          if ! grep -q "PB_RECOVERY_DEVICE" $DT_PATH/BoardConfig.mk; then
+            cat >> $DT_PATH/BoardConfig.mk <<EOF
+
+          # PitchBlack Recovery Project Flags
+          PB_RECOVERY_DEVICE := m14x
+          PB_RECOVERY_VENDOR := samsung
+          PB_BUILD_VBMETA_IMAGE := true
+          TW_INCLUDE_CRYPTO := true
+          TW_BRIGHTNESS_PATH := "/sys/class/backlight/panel/brightness"
+          BOARD_USES_RECOVERY_AS_BOOT := false
+          TARGET_NO_RECOVERY := false
+          EOF
+          fi
+
+          # 5. Patch recovery.fstab for Decryption (FBE)
+          sed -i 's|/dev/block/by-name/userdata.*|/dev/block/by-name/userdata  flags=display=data;fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized+wrappedkey_v0|g' $DT_PATH/recovery.fstab
+
+      - name: Commit Converted Tree
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "PBRP Path Fix: Converted m14x tree successfully" || echo "No changes to commit"
+          git push
+
+      - name: Prepare Build Environment
+        run: |
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential libncurses5 zip curl git wget python3 repo
+
+      - name: Sync PBRP Source
+        run: |
+          mkdir pb-source && cd pb-source
+          repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb -b android-12.1 --depth=1
+          repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
+
+      - name: Move Device Tree to Source
+        run: |
+          mkdir -p pb-source/device/samsung/m14x
+          cp -r extracted/stock_tree/samsung/m14x/* pb-source/device/samsung/m14x/
+
+      - name: Build PBRP Image
+        run: |
+          cd pb-source
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch pbrp_m14x-userdebug
+          mka recoveryimage -j$(nproc --all)
+
+      - name: Upload Recovery Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PBRP-Samsung-M14x
+          path: pb-source/out/target/product/m14x/recovery.img
