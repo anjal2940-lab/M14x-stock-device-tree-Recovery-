@@ -1,0 +1,44 @@
+name: Extract Device Tree
+
+on:
+  workflow_dispatch: # Allows you to run this manually
+    inputs:
+      img_url:
+        description: 'Direct link to recovery.img'
+        required: true
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y device-tree-compiler python3-pip
+          pip3 install twrpdtgen extract-dtb
+
+      - name: Download Recovery Image
+        run: wget ${{ github.event.inputs.img_url }} -O recovery.img
+
+      - name: Extract DTB and Decompile to DTS
+        run: |
+          mkdir -p output/dts
+          extract-dtb recovery.img -o output/dtb_blobs
+          # Decompile all found DTBs
+          for f in output/dtb_blobs/*.dtb; do
+            dtc -I dtb -O dts -o "output/dts/$(basename "$f" .dtb).dts" "$f"
+          done
+
+      - name: Generate Full TWRP Tree (Optional)
+        run: |
+          python3 -m twrpdtgen recovery.img --output output/twrp_tree || echo "twrpdtgen failed, but DTS extracted."
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: extracted-device-tree
+          path: output/
+
