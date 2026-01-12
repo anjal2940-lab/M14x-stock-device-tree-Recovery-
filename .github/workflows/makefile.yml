@@ -1,50 +1,52 @@
-name: Verify M14x Device Tree
+name: Decompress and Fix DTB
 
 on:
   workflow_dispatch:
 
 jobs:
-  verify:
+  decompress:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v4
         with:
           ref: standardized-tree
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Folder Structure
+      - name: Extract Raw DTB
         run: |
-          echo "Checking for required prebuilt files..."
-          [ -f "prebuilt/kernel" ] && echo "✅ Kernel found" || echo "❌ Kernel MISSING"
-          [ -f "prebuilt/dtbo.img" ] && echo "✅ DTBO found" || echo "❌ DTBO MISSING"
-          [ -f "prebuilt/dtb/dtb.img" ] && echo "✅ DTB found in subfolder" || echo "❌ DTB MISSING in prebuilt/dtb/"
-
-      - name: Verify DTB Integrity (Magic Number)
-        run: |
-          echo "Checking DTB Magic Number (should be d00dfeed)..."
-          # Read first 4 bytes and convert to hex
-          MAGIC=$(hexdump -n 4 -e '"%02x"' prebuilt/dtb/dtb.img)
+          cd prebuilt/dtb
+          
+          # Rename to identify as compressed
+          mv dtb.img dtb.img.lz4
+          
+          # Attempt decompression using lz4 (common for Samsung)
+          # If lz4 fails, we will try gunzip
+          sudo apt-get install -y lz4
+          lz4 -d dtb.img.lz4 dtb.img || true
+          
+          # Check if the result is now a valid DTB
+          MAGIC=$(hexdump -n 4 -e '"%02x"' dtb.img)
           if [ "$MAGIC" == "d00dfeed" ]; then
-            echo "✅ DTB Magic Number is valid: $MAGIC"
+            echo "✅ Successfully decompressed! New Magic: $MAGIC"
+            rm dtb.img.lz4
           else
-            echo "❌ INVALID DTB! Found: $MAGIC. Expected: d00dfeed"
-            exit 1
+            echo "❌ LZ4 failed or Magic still wrong ($MAGIC). Trying GZIP..."
+            mv dtb.img.lz4 dtb.img.gz
+            gunzip -f dtb.img.gz || true
+            MAGIC_GZ=$(hexdump -n 4 -e '"%02x"' dtb.img)
+            if [ "$MAGIC_GZ" == "d00dfeed" ]; then
+                echo "✅ Successfully decompressed via GZIP!"
+            else
+                echo "❌ Fatal: File is not a standard compressed DTB. Found: $MAGIC_GZ"
+                exit 1
+            fi
           fi
 
-      - name: Verify Exynos 1330 Compatibility
+      - name: Commit Fixed DTB
         run: |
-          echo "Searching for Exynos 1330 / s5e8535 identifiers..."
-          # Look for the internal Samsung/Exynos platform strings
-          STRINGS=$(strings prebuilt/dtb/dtb.img | grep -iE "s5e8535|erd8535|exynos1330" | sort -u)
-          if [ ! -z "$STRINGS" ]; then
-            echo "✅ Found matching platform strings:"
-            echo "$STRINGS"
-          else
-            echo "❌ No matching Exynos 1330 strings found in DTB!"
-            exit 1
-          fi
-
-      - name: Check BoardConfig Syntax
-        run: |
-          echo "Verifying BoardConfig.mk variables..."
-          grep -E "BOARD_PREBUILT_DTBIMAGE_DIR|BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add prebuilt/dtb/dtb.img
+          git commit -m "Fix: Decompressed dtb.img to raw FDT format"
+          git push origin standardized-tree
