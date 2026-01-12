@@ -5,15 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Inherit from your LOCAL 64-bit config file
+$(call inherit-product, device/samsung/m14x/core_64_bit.mk)
+
 # Inherit from those products. Most specific first.
-$(call inherit-product, $(SRC_TARGET_DIR)/product/full_64bit_device.mk)
-$(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 
 # Inherit PBRP common bits
 $(call inherit-product, vendor/pb/config/common.mk)
 
-# Inherit from m14x device
+# Inherit from m14x device-specific makefile
 $(call inherit-product, device/samsung/m14x/device.mk)
 
 ## Device identifier.
