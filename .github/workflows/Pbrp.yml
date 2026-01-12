@@ -1,4 +1,4 @@
-name: PBRP Builder
+name: PBRP Builder (50GB Space Mod)
 
 on:
   workflow_dispatch:
@@ -9,15 +9,28 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Maximize Build Space (The 50GB Script)
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove Android SDK, .NET, Haskell, CodeQL, and Docker images
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/lib/node_modules
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /usr/lib/jvm
+          # Clean apt cache
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          echo "Disk space after cleanup (Target: 50GB+ free):"
+          df -h /
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: main
-
-      - name: Cleanup Runner Space
-        run: |
-          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc
-          sudo apt-get clean
 
       - name: Install Build Dependencies
         run: |
@@ -27,23 +40,22 @@ jobs:
           sudo apt-get install -y bc build-essential libncurses5 libncursesw5 \
           zip curl git wget python3 libssl-dev libstdc++6 python-is-python3
           
-          # FORCE LOCAL REPO INSTALLATION
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
-          # Prepend ~/bin to PATH so it takes priority over /usr/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
           
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync PBRP Source
+      - name: Sync PBRP Source (Shallow)
         run: |
-          # Ensure we use the local repo launcher
           PATH=$HOME/bin:$PATH
           mkdir pb-source && cd pb-source
           repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb -b android-12.1 --depth=1
           repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune
+          echo "Space remaining after sync:"
+          df -h /
 
       - name: Setup Device Tree
         run: |
@@ -58,21 +70,15 @@ jobs:
           lunch pbrp_m14x-userdebug
           mka pbrp -j$(nproc --all)
 
-      - name: Package for Odin (TAR)
+      - name: Package and Upload
         run: |
           cd pb-source/out/target/product/m14x/
-          if [ -f recovery.img ]; then
-            tar -cvf PBRP-M14x-Odin.tar recovery.img
-          else
-            echo "recovery.img not found, check build logs."
-            exit 1
-          fi
+          [ -f recovery.img ] && tar -cvf PBRP-M14x-Odin.tar recovery.img
 
-      - name: Upload Recovery Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PBRP-Samsung-M14x-Build
+          name: PBRP-M14x-Final
           path: |
             pb-source/out/target/product/m14x/PBRP-M14x-Odin.tar
             pb-source/out/target/product/m14x/PBRP*.zip
-            pb-source/out/target/product/m14x/recovery.img
