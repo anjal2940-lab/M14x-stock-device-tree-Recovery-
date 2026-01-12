@@ -6,9 +6,9 @@
 #
 
 PRODUCT_MAKEFILES := \
-    $(LOCAL_DIR)/omni_m14x.mk
+    $(LOCAL_DIR)/pbrp_m14x.mk
 
 COMMON_LUNCH_CHOICES := \
-    omni_m14x-user \
-    omni_m14x-userdebug \
-    omni_m14x-eng
+    pbrp_m14x-user \
+    pbrp_m14x-userdebug \
+    pbrp_m14x-eng
