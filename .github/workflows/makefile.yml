@@ -1,42 +1,31 @@
-name: PBRP M14 Build with Auto-Fix
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Device Tree
-        uses: actions/checkout@v4
-        with:
-          path: device/samsung/m14x
-
-      - name: Restructure Folders and Fix BoardConfig
+      - name: Fix DTB Folder Structure and BoardConfig
         run: |
-          cd device/samsung/m14x
-          # 1. Create the required DTB directory structure
-          mkdir -p prebuilt/dtb
+          # Define the path to your device tree
+          DEV_PATH="device/samsung/m14x"
           
-          # 2. Move the DTB image if it exists in the old location
-          if [ -f "prebuilt/dtb.img" ]; then
-            mv prebuilt/dtb.img prebuilt/dtb/dtb.img
-            echo "Successfully moved dtb.img to prebuilt/dtb/"
+          echo "Step 1: Creating prebuilt/dtb directory..."
+          mkdir -p $DEV_PATH/prebuilt/dtb
+          
+          echo "Step 2: Moving prebuilt files to correct locations..."
+          # Move dtb.img into the new folder if it exists in the root of prebuilt
+          if [ -f "$DEV_PATH/prebuilt/dtb.img" ]; then
+            mv $DEV_PATH/prebuilt/dtb.img $DEV_PATH/prebuilt/dtb/dtb.img
+            echo "Moved dtb.img to $DEV_PATH/prebuilt/dtb/"
+          fi
+          
+          echo "Step 3: Updating BoardConfig.mk variables..."
+          # Remove any existing DTB variable lines to prevent duplicates
+          sed -i '/TARGET_PREBUILT_DTB/d' $DEV_PATH/BoardConfig.mk
+          sed -i '/BOARD_PREBUILT_DTBIMAGE_DIR/d' $DEV_PATH/BoardConfig.mk
+          
+          # Add the correct directory variable
+          # We use the DTBIMAGE_DIR variable which Ninja expects for prebuilt DTBs
+          echo "BOARD_PREBUILT_DTBIMAGE_DIR := \$(DEVICE_PATH)/prebuilt/dtb" >> $DEV_PATH/BoardConfig.mk
+          
+          # Ensure the inclusion flag is set
+          if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" $DEV_PATH/BoardConfig.mk; then
+            echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> $DEV_PATH/BoardConfig.mk
           fi
 
-          # 3. Update BoardConfig.mk automatically using sed
-          # Replace the old DTB variable with the new Directory variable
-          sed -i 's/TARGET_PREBUILT_DTB := .*/BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)\/prebuilt\/dtb/g' BoardConfig.mk
-          
-          # Ensure BOARD_INCLUDE_DTB_IN_BOOTIMG is set to true
-          if ! grep -q "BOARD_INCLUDE_DTB_IN_BOOTIMG" BoardConfig.mk; then
-            echo "BOARD_INCLUDE_DTB_IN_BOOTIMG := true" >> BoardConfig.mk
-          fi
-
-      - name: Build PBRP
-        uses: PitchBlackRecoveryProject/pbrp-build-action@main
-        with:
-          manifest_url: 'https://github.com/PitchBlackRecoveryProject/manifest_pb'
-          manifest_branch: 'android-12.1'
-          device_code: 'm14x'
-          build_target: 'recovery'
+          echo "Fix applied successfully. Current BoardConfig Kernel Section:"
+          grep -E "DTB|KERNEL" $DEV_PATH/BoardConfig.mk
