@@ -1,93 +1,36 @@
-name: PitchBlack Recovery Project Builder
+name: Standardize Device Tree
 
 on:
-  workflow_dispatch:
-    inputs:
-      MANIFEST_BRANCH:
-        description: 'PBRP Manifest Branch'
-        required: true
-        default: 'android-12.1'
-        type: choice
-        options:
-        - android-12.1
-        - android-11.0
-      BUILD_TARGET:
-        description: 'Build Target'
-        required: true
-        default: 'pbrp'
-        type: choice
-        options:
-        - pbrp
-        - recovery
+  workflow_dispatch: # Allows you to run this manually
 
 jobs:
-  build:
-    name: Build PBRP by ${{ github.actor }}
-    runs-on: ubuntu-22.04
-    if: github.event.repository.owner.id == github.event.sender.id
-    env:
-      DEBIAN_FRONTEND: noninteractive
-    permissions:
-      contents: write
-      
+  format-tree:
+    runs-on: ubuntu-latest
     steps:
-    - name: Initial Setup
-      run: |
-        echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
-        echo "BUILD_DATE=$(TZ=UTC date +%Y%m%d)" >> $GITHUB_ENV
-        
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-    # FIX: Move files from deep path to workspace root so the builder finds them immediately
-    - name: Prepare Device Tree Path
-      run: |
-        cp -r extracted/stock_tree/samsung/m14x/* .
-        rm -rf extracted
-        echo "Root files after move:"
-        ls -F
+      - name: Create Standard Structure
+        run: |
+          # 1. Create a workspace for the new structure
+          mkdir -p output/device/samsung/m14x
+          
+          # 2. Copy files from your deep extracted path to the standard root
+          # Note: We copy the content of the m14x folder, not the folder itself
+          cp -r extracted/stock_tree/samsung/m14x/* output/device/samsung/m14x/
+          
+          # 3. Fix Internal Makefiles (sed logic)
+          cd output/device/samsung/m14x/
+          find . -type f -name "*.mk" -exec sed -i 's|device/samsung/m14x/extracted/stock_tree/samsung/m14x|device/samsung/m14x|g' {} +
+          
+          # 4. Verify the new layout
+          echo "New standardized structure:"
+          ls -R
 
-    - name: Clean-up
-      uses: rokibhasansagar/slimhub_actions@main
-
-    - name: Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 24
-
-    - name: Build PitchBlack Recovery
-      uses: mlm-games/pitchblack-pbrp-builder-action@main
-      id: build
-      with:
-        MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
-        # We point it to your CURRENT repo. The action will clone it, 
-        # but since we moved files to the root, it will find pbrp_m14x.mk correctly.
-        DEVICE_TREE: 'https://github.com/anjal2940-lab/M14x-stock-device-tree-Recovery-'
-        DEVICE_TREE_BRANCH: 'main'
-        DEVICE_NAME: 'm14x'
-        BUILD_TARGET: ${{ inputs.BUILD_TARGET }}
-  
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: PBRP-Recovery-m14x-${{ env.BUILD_DATE }}
-        path: |
-          work/out/target/product/m14x/*.img
-          work/out/target/product/m14x/*.tar
-          work/out/target/product/m14x/PBRP*.zip
-
-    - name: Upload to Release
-      if: success()
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          work/out/target/product/m14x/*.img
-          work/out/target/product/m14x/PBRP*.zip
-          work/out/target/product/m14x/*.tar
-        name: PBRP for m14x - ${{ env.BUILD_DATE }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          Build Date: ${{ env.BUILD_DATE }}
-          Device: Samsung M14 (m14x)
-        prerelease: false
-        draft: false
+      - name: Push to Standardized Branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output/device/samsung/m14x
+          publish_branch: standardized-tree # This creates a new branch with JUST the clean files
+          commit_message: "Standardize tree structure for PBRP/TWRP build"
