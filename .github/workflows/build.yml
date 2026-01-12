@@ -6,6 +6,8 @@ on:
 jobs:
   extract:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to push changes back to the repo
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,39 +20,31 @@ jobs:
 
       - name: Download from MediaFire
         run: |
-          # The specific link you provided
           URL="https://www.mediafire.com/file/qj8dl57ep3oidu3/recovery.img/file?dkey=l6wk15xrxwn&r=187"
-          
-          # Scrape the direct download link from the page
           DIRECT_LINK=$(curl -sL "$URL" | grep -oE 'https?://download[^"]+' | head -n 1)
-          
-          echo "Direct link found: $DIRECT_LINK"
           curl -L "$DIRECT_LINK" -o recovery.img
 
       - name: Extract and Decompile
         run: |
-          mkdir -p output/dts
-          # Extract the binary DTB blobs
-          extract-dtb recovery.img -o output/dtb_blobs
-          
-          # Check if extraction was successful
-          if [ -z "$(ls -A output/dtb_blobs 2>/dev/null)" ]; then
-             echo "Error: No DTB blobs found. The image might be headerless or encrypted."
-             exit 1
-          fi
-
-          # Decompile all found DTBs to readable .dts text
-          for f in output/dtb_blobs/*.dtb; do
-            dtc -I dtb -O dts -o "output/dts/$(basename "$f" .dtb).dts" "$f"
+          mkdir -p extracted/dts
+          extract-dtb recovery.img -o extracted/dtb_blobs
+          for f in extracted/dtb_blobs/*.dtb; do
+            dtc -I dtb -O dts -o "extracted/dts/$(basename "$f" .dtb).dts" "$f"
           done
 
       - name: Generate TWRP Tree
         run: |
-          # Automatically build the TWRP folder structure
-          python3 -m twrpdtgen recovery.img --output output/twrp_tree || echo "twrpdtgen skipped."
+          # This will save the tree into a folder named 'stock_tree'
+          python3 -m twrpdtgen recovery.img --output extracted/stock_tree || echo "twrpdtgen skipped."
 
-      - name: Upload Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: device-tree-results
-          path: output/
+      - name: Commit and Push to Repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Remove the large recovery.img so it doesn't bloat the repo
+          rm recovery.img
+          
+          git add extracted/
+          git commit -m "Auto-extract: Added DTS and Stock TWRP tree"
+          git push
