@@ -1,84 +1,97 @@
-name: PBRP Builder (50GB Space Mod)
+name: PitchBlack Recovery Project Builder
 
 on:
   workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        description: 'PBRP Manifest Branch'
+        required: true
+        default: 'android-12.1'
+        type: choice
+        options:
+        - android-12.1
+        - android-11.0
+      BUILD_TARGET:
+        description: 'Build Target'
+        required: true
+        default: 'pbrp'
+        type: choice
+        options:
+        - pbrp
+        - recovery
 
 jobs:
   build:
+    name: Build PBRP by ${{ github.actor }}
     runs-on: ubuntu-latest
+    if: github.event.repository.owner.id == github.event.sender.id
     permissions:
       contents: write
+      
     steps:
-      - name: Maximize Build Space (The 50GB Script)
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          # Remove Android SDK, .NET, Haskell, CodeQL, and Docker images
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/lib/node_modules
-          sudo rm -rf /usr/local/share/chromium
-          sudo rm -rf /usr/lib/jvm
-          # Clean apt cache
-          sudo apt-get autoremove -y
-          sudo apt-get clean
-          echo "Disk space after cleanup (Target: 50GB+ free):"
-          df -h /
+    - name: Initial Setup
+      run: |
+        echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+        echo "BUILD_DATE=$(TZ=UTC date +%Y%m%d)" >> $GITHUB_ENV
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
+    - name: Checkout Your Repo
+      uses: actions/checkout@v4
+      with:
+        path: main_repo
 
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          echo "deb http://security.ubuntu.com/ubuntu focal-security main universe" | sudo tee /etc/apt/sources.list.d/focal-security.list
-          sudo apt-get update
-          sudo apt-get install -y bc build-essential libncurses5 libncursesw5 \
-          zip curl git wget python3 libssl-dev libstdc++6 python-is-python3
-          
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-          
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+    - name: Maximize Build Space (Fix No Space Error)
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/lib/jvm
+        sudo apt-get clean
+        df -h
 
-      - name: Sync PBRP Source (Shallow)
-        run: |
-          PATH=$HOME/bin:$PATH
-          mkdir pb-source && cd pb-source
-          repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb -b android-12.1 --depth=1
-          repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune
-          echo "Space remaining after sync:"
-          df -h /
+    - name: Clean-up (Slimhub)
+      uses: rokibhasansagar/slimhub_actions@main
 
-      - name: Setup Device Tree
-        run: |
-          mkdir -p pb-source/device/samsung/m14x
-          cp -r extracted/stock_tree/samsung/m14x/* pb-source/device/samsung/m14x/
+    - name: Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 24
 
-      - name: Build PBRP
-        run: |
-          cd pb-source
-          source build/envsetup.sh
+    - name: Build PitchBlack Recovery
+      uses: mlm-games/pitchblack-pbrp-builder-action@main
+      with:
+        MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
+        # We pass a dummy URL because we will manually inject your tree below
+        DEVICE_TREE: 'https://github.com/PitchBlackRecoveryProject/android_device_samsung_m14x-dummy'
+        DEVICE_TREE_BRANCH: 'main'
+        BUILD_TARGET: ${{ inputs.BUILD_TARGET }}
+        DEVICE_NAME: 'm14x'
+        # This hook allows us to replace the dummy tree with your real files
+        CUSTOM_COMMAND: |
+          rm -rf device/samsung/m14x
+          mkdir -p device/samsung/m14x
+          cp -r $GITHUB_WORKSPACE/main_repo/extracted/stock_tree/samsung/m14x/* device/samsung/m14x/
+          # Ensure PBRP knows this is a Samsung build
           export ALLOW_MISSING_DEPENDENCIES=true
-          lunch pbrp_m14x-userdebug
-          mka pbrp -j$(nproc --all)
+  
+    - name: Package for Odin (TAR)
+      if: success()
+      run: |
+        cd work/out/target/product/m14x/
+        tar -cvf PBRP-M146B-Odin.tar recovery.img
 
-      - name: Package and Upload
-        run: |
-          cd pb-source/out/target/product/m14x/
-          [ -f recovery.img ] && tar -cvf PBRP-M14x-Odin.tar recovery.img
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: PBRP-M14x-Final
+        path: |
+          work/out/target/product/m14x/PBRP-M146B-Odin.tar
+          work/out/target/product/m14x/PBRP*.zip
+          work/out/target/product/m14x/recovery.img
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: PBRP-M14x-Final
-          path: |
-            pb-source/out/target/product/m14x/PBRP-M14x-Odin.tar
-            pb-source/out/target/product/m14x/PBRP*.zip
+    - name: Upload to Release
+      if: success()
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          work/out/target/product/m14x/PBRP-M146B-Odin.tar
+          work/out/target/product/m14x/PBRP*.zip
+        name: PBRP for M146B - ${{ env.BUILD_DATE }}
+        tag_name: ${{ github.run_id }}
+        body: "Automated PBRP build for Samsung M14 (m14x)."
