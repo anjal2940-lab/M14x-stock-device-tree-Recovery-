@@ -38,7 +38,7 @@ on:
       LDCHECK_PATH:
         description: 'Path for dependency check (optional)'
         required: false
-        default: 'recovery/root/system/bin/qseecomd'
+        default: 'recovery/root/system/bin/vold'
 
 jobs:
   build:
@@ -62,7 +62,7 @@ jobs:
     - name: Clean-up
       uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Swap Space   # Easier
+    - name: Swap Space
       uses: pierotofy/set-swap-space@master
       with:
         swap-size-gb: 24
@@ -78,47 +78,33 @@ jobs:
   
     - name: Upload Artifacts
       uses: actions/upload-artifact@v6
-      if: inputs.upload_releases == false || github.event_name != 'workflow_dispatch'
       with:
-        name: PBRP-Recovery-${{ env.DEVICE_NAME-m14x }}-${{ env.BUILD_DATE }}
+        name: PBRP-Recovery-m14x-${{ env.BUILD_DATE }}
         path: |
-          ${{ env.OUTPUT_DIR }}/*.img
-          ${{ env.OUTPUT_DIR }}/*.tar
-          ${{ env.OUTPUT_DIR }}/*vbmeta*
-          ${{ env.OUTPUT_DIR }}/*.cpio
+          work/out/target/product/m14x/*.img
+          work/out/target/product/m14x/*.tar
+          work/out/target/product/m14x/*.zip
 
     - name: Upload to Release
       if: success()
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ${{ env.OUTPUT_DIR }}/*.img
-          ${{ env.OUTPUT_DIR }}/PBRP*.zip
-        name: PBRP for ${{ inputs.DEVICE_NAME-m14x }} - ${{ env.BUILD_DATE }}
+          work/out/target/product/m14x/*.img
+          work/out/target/product/m14x/PBRP*.zip
+          work/out/target/product/m14x/*.tar
+        name: PBRP for m14x - ${{ env.BUILD_DATE }}
         tag_name: ${{ github.run_id }}
         body: |
-          ## Build Information
-          - **Build Date:** ${{ env.BUILD_DATE }}
-          - **Branch:** ${{ inputs.MANIFEST_BRANCH }}
-          - **Device:** ${{ inputs.DEVICE_NAME-m14x }}
-          - **Build Type:** ${{ inputs.BUILD_TARGET }}
-          
-          ## Source Information
-          - **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
-          - **Branch:** ${{ inputs.DEVICE_TREE_BRANCH }}
-          
-          ## Build Status
-          - Recovery Image MD5: `${{ env.MD5_IMG }}`
-          - ZIP Package MD5: `${{ env.MD5_ZIP }}`
-          
-          > Note: This is an automated build. Please test thoroughly before using.
+          Automated PBRP build for Samsung M14 (m14x).
+          Standardized Tree Branch: ${{ inputs.DEVICE_TREE_BRANCH }}
         prerelease: false
         draft: false
 
     - name: Run LDCHECK
       uses: mlm-games/ldcheck-action@main
       with:
-        OUTPUT_DIR: ${{ env.OUTPUT_DIR }}
+        OUTPUT_DIR: work/out/target/product/m14x
         LDCHECKPATH: ${{ inputs.LDCHECK_PATH }}
       continue-on-error: true
 
@@ -127,23 +113,4 @@ jobs:
       run: |
         BUILD_END=$(date +%s)
         BUILD_DURATION=$((BUILD_END - BUILD_START))
-        
-        hours=$((BUILD_DURATION / 3600))
-        minutes=$(((BUILD_DURATION % 3600) / 60))
-        seconds=$((BUILD_DURATION % 60))
-        
-        echo "Build completed in ${hours}h ${minutes}m ${seconds}s"
-        
-        # Save build statistics
-        echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
-        echo "BUILD_HOURS=${hours}" >> $GITHUB_ENV
-        echo "BUILD_MINUTES=${minutes}" >> $GITHUB_ENV
-        echo "BUILD_SECONDS=${seconds}" >> $GITHUB_ENV
-
-    - name: Cleanup Workspace
-      if: always()
-      run: |
-        cd ${{ github.workspace }}
-        rm -rf android-recovery
-        df -h
-
+        echo "Build completed in $((BUILD_DURATION / 60)) minutes."
