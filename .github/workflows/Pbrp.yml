@@ -1,97 +1,289 @@
-name: PitchBlack Recovery Project Builder
+name: Recovery Build
 
 on:
   workflow_dispatch:
     inputs:
+      MANIFEST_URL:
+        description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
+        required: true
+        default: 'PLACEHOLDER'
       MANIFEST_BRANCH:
-        description: 'PBRP Manifest Branch'
+        description: 'MANIFEST_BRANCH'
         required: true
-        default: 'android-12.1'
-        type: choice
-        options:
-        - android-12.1
-        - android-11.0
+        default: 'PLACEHOLDER'
+      DEVICE_TREE_URL:
+        description: 'DEVICE_TREE_URL'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_TREE_BRANCH:
+        description: 'DEVICE_TREE_BRANCH'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'PLACEHOLDER'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'PLACEHOLDER'
       BUILD_TARGET:
-        description: 'Build Target'
+        description: 'BUILD_TARGET'
         required: true
-        default: 'pbrp'
-        type: choice
-        options:
-        - pbrp
-        - recovery
+        default: 'PLACEHOLDER'
+      USER_NAME:
+        description: 'Git Username'
+        required: true
+        default: 'PLACEHOLDER'
+      USER_EMAIL:
+        description: 'Git Email'
+        required: true
+        default: 'PLACEHOLDER'
 
 jobs:
   build:
-    name: Build PBRP by ${{ github.actor }}
-    runs-on: ubuntu-latest
     if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      
     steps:
-    - name: Initial Setup
+    - name: Display Run Parameters
       run: |
-        echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
-        echo "BUILD_DATE=$(TZ=UTC date +%Y%m%d)" >> $GITHUB_ENV
+        echo "::group::User Environment Variables"
+        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
+        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
+        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
+        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
+        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
+        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
+        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
+        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
+        echo "::endgroup::"
 
-    - name: Checkout Your Repo
+    - name: Check Out
       uses: actions/checkout@v4
-      with:
-        path: main_repo
 
-    - name: Maximize Build Space (Fix No Space Error)
-      run: |
-        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/lib/jvm
-        sudo apt-get clean
-        df -h
-
-    - name: Clean-up (Slimhub)
+    - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Swap Space
+    - name: Prepare the environment
+      run: |
+        sudo apt install git aria2 -y
+        mkdir ofx_scripts
+        cd ofx_scripts
+        git clone https://gitlab.com/OrangeFox/misc/scripts 
+        cd scripts
+        sudo bash setup/android_build_env.sh
+        sed -i 's/cd -/cd ../g' setup/install_android_sdk.sh
+        sudo bash setup/install_android_sdk.sh
+
+    - name: Setup SSH Keys
+      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') }}
+      uses: webfactory/ssh-agent@v0.5.4
+      with:
+          ssh-private-key: |
+              ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Install repo
+      run: |
+        mkdir ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+      
+    - name: Initialize repo
+      run: |
+        mkdir workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+        git config --global user.name "${{ github.event.inputs.USER_NAME }}"
+        git config --global user.email "${{ github.event.inputs.USER_EMAIL }}"
+        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+      id: pwd
+          
+    - name: Repo Sync
+      run: |
+        repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j$(nproc --all)
+      working-directory: workspace
+      
+    - name: Clone device tree
+      run: |
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 24
+        swap-size-gb: 12
 
-    - name: Build PitchBlack Recovery
-      uses: mlm-games/pitchblack-pbrp-builder-action@main
-      with:
-        MANIFEST_BRANCH: ${{ inputs.MANIFEST_BRANCH }}
-        # We pass a dummy URL because we will manually inject your tree below
-        DEVICE_TREE: 'https://github.com/PitchBlackRecoveryProject/android_device_samsung_m14x-dummy'
-        DEVICE_TREE_BRANCH: 'main'
-        BUILD_TARGET: ${{ inputs.BUILD_TARGET }}
-        DEVICE_NAME: 'm14x'
-        # This hook allows us to replace the dummy tree with your real files
-        CUSTOM_COMMAND: |
-          rm -rf device/samsung/m14x
-          mkdir -p device/samsung/m14x
-          cp -r $GITHUB_WORKSPACE/main_repo/extracted/stock_tree/samsung/m14x/* device/samsung/m14x/
-          # Ensure PBRP knows this is a Samsung build
-          export ALLOW_MISSING_DEPENDENCIES=true
-  
-    - name: Package for Odin (TAR)
-      if: success()
+    - name: Building recovery
       run: |
-        cd work/out/target/product/m14x/
-        tar -cvf PBRP-M146B-Odin.tar recovery.img
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: PBRP-M14x-Final
-        path: |
-          work/out/target/product/m14x/PBRP-M146B-Odin.tar
-          work/out/target/product/m14x/PBRP*.zip
-          work/out/target/product/m14x/recovery.img
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Upload to Release
-      if: success()
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v1
       with:
-        files: |
-          work/out/target/product/m14x/PBRP-M146B-Odin.tar
-          work/out/target/product/m14x/PBRP*.zip
-        name: PBRP for M146B - ${{ env.BUILD_DATE }}
+        files: | 
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
+        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
-        body: "Automated PBRP build for Samsung M14 (m14x)."
+        body: |
+          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          Device: ${{ github.event.inputs.DEVICE_NAME }}
+          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Recovery Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_URL:
+        description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
+        required: true
+        default: 'PLACEHOLDER'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_TREE_URL:
+        description: 'DEVICE_TREE_URL'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_TREE_BRANCH:
+        description: 'DEVICE_TREE_BRANCH'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'PLACEHOLDER'
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'PLACEHOLDER'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'PLACEHOLDER'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'PLACEHOLDER'
+      USER_NAME:
+        description: 'Git Username'
+        required: true
+        default: 'PLACEHOLDER'
+      USER_EMAIL:
+        description: 'Git Email'
+        required: true
+        default: 'PLACEHOLDER'
+
+jobs:
+  build:
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Display Run Parameters
+      run: |
+        echo "::group::User Environment Variables"
+        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
+        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
+        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
+        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
+        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
+        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
+        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
+        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
+        echo "::endgroup::"
+
+    - name: Check Out
+      uses: actions/checkout@v4
+
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Prepare the environment
+      run: |
+        sudo apt install git aria2 -y
+        mkdir ofx_scripts
+        cd ofx_scripts
+        git clone https://gitlab.com/OrangeFox/misc/scripts 
+        cd scripts
+        sudo bash setup/android_build_env.sh
+        sed -i 's/cd -/cd ../g' setup/install_android_sdk.sh
+        sudo bash setup/install_android_sdk.sh
+
+    - name: Setup SSH Keys
+      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') }}
+      uses: webfactory/ssh-agent@v0.5.4
+      with:
+          ssh-private-key: |
+              ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Install repo
+      run: |
+        mkdir ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+      
+    - name: Initialize repo
+      run: |
+        mkdir workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+        git config --global user.name "${{ github.event.inputs.USER_NAME }}"
+        git config --global user.email "${{ github.event.inputs.USER_EMAIL }}"
+        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+      id: pwd
+          
+    - name: Repo Sync
+      run: |
+        repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j$(nproc --all)
+      working-directory: workspace
+      
+    - name: Clone device tree
+      run: |
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 12
+
+    - name: Building recovery
+      run: |
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: | 
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
+        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+        tag_name: ${{ github.run_id }}
+        body: |
+          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          Device: ${{ github.event.inputs.DEVICE_NAME }}
+          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
