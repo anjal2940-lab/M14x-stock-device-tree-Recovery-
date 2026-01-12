@@ -18,13 +18,12 @@ jobs:
 
       - name: Extract Raw DTB
         run: |
-          # This python script scans the file for the d00dfeed magic number
-          # and clips the file to start exactly there.
           python3 << 'EOF'
           import os
 
           input_file = "prebuilt/dtb/dtb.img"
           output_file = "prebuilt/dtb/dtb_raw.img"
+          # The standard FDT magic is d0 0d fe ed
           magic = b'\xd0\x0d\xfe\xed'
 
           if not os.path.exists(input_file):
@@ -47,13 +46,14 @@ jobs:
 
       - name: Final Verification
         run: |
-          # Verify the new file magic
-          MAGIC=$(hexdump -n 4 -e '"%02x"' prebuilt/dtb/dtb_raw.img)
-          echo "New file magic: $MAGIC"
+          # Use -C (Canonical) to show literal hex bytes: d0 0d fe ed
+          MAGIC=$(hexdump -n 4 -e '4/1 "%02x"' prebuilt/dtb/dtb_raw.img)
+          echo "New file magic (literal): $MAGIC"
           if [ "$MAGIC" == "d00dfeed" ]; then
+            echo "✅ SUCCESS: Valid DTB detected."
             mv prebuilt/dtb/dtb_raw.img prebuilt/dtb/dtb.img
           else
-            echo "Extraction failed to produce valid magic."
+            echo "❌ Extraction failed. Got $MAGIC instead of d00dfeed"
             exit 1
           fi
 
@@ -62,5 +62,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add prebuilt/dtb/dtb.img
-          git commit -m "Fix: Extracted raw DTB from AVB container"
+          git commit -m "Fix: Extracted raw DTB with verified magic"
           git push origin standardized-tree
