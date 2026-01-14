@@ -5,7 +5,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # 20.04 is the industry standard for Android 12 builds. 
+    # It contains all legacy 32-bit libraries natively.
+    runs-on: ubuntu-20.04
     permissions:
       contents: write
     steps:
@@ -17,22 +19,12 @@ jobs:
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
-          sudo dpkg --add-architecture i386
-          
-          # Add Ubuntu 22.04 repositories to find legacy libncurses5
-          echo "deb http://security.ubuntu.com/ubuntu jammy-security main" | sudo tee /etc/apt/sources.list.d/jammy-security.list
-          
-          sudo apt-get update
           sudo apt-get install -y \
             gperf gcc-multilib g++-multilib libc6-dev-i386 \
-            lib32z1-dev libncurses5-dev libncurses5:i386 \
-            x11proto-core-dev libx11-dev libgl1-mesa-dev \
-            libxml2-utils xsltproc unzip bc ccache \
-            python3 python-is-python3
+            lib32ncurses5-dev x11proto-core-dev libx11-dev \
+            lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc \
+            unzip bc ccache python3 python-is-python3
           
-          # Clean up the extra repo to avoid conflicts later
-          sudo rm /etc/apt/sources.list.d/jammy-security.list
-
       - name: Install Repo
         run: |
           mkdir -p ~/bin
@@ -46,13 +38,11 @@ jobs:
           cd pbrp
           git config --global user.email "gh-action@example.com"
           git config --global user.name "GitHub Action"
-          # Shallow sync to save time and bandwidth
           ~/bin/repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb.git -b android-12.1 --depth=1
           ~/bin/repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Clone Fixed Device Tree
         run: |
-          # Cloning your fixed branch into the correct build path
           git clone https://github.com/anjal2940-lab/M14x-stock-device-tree-Recovery- -b standardized-tree pbrp/device/samsung/m14x
 
       - name: Setup CCache
