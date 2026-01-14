@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Now using 24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -18,8 +18,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo dpkg --add-architecture i386
+          
+          # Add Ubuntu 22.04 repositories to find legacy libncurses5
+          echo "deb http://security.ubuntu.com/ubuntu jammy-security main" | sudo tee /etc/apt/sources.list.d/jammy-security.list
+          
           sudo apt-get update
-          # Updated package names for Ubuntu 24.04 compatibility
           sudo apt-get install -y \
             gperf gcc-multilib g++-multilib libc6-dev-i386 \
             lib32z1-dev libncurses5-dev libncurses5:i386 \
@@ -27,6 +30,9 @@ jobs:
             libxml2-utils xsltproc unzip bc ccache \
             python3 python-is-python3
           
+          # Clean up the extra repo to avoid conflicts later
+          sudo rm /etc/apt/sources.list.d/jammy-security.list
+
       - name: Install Repo
         run: |
           mkdir -p ~/bin
@@ -40,11 +46,13 @@ jobs:
           cd pbrp
           git config --global user.email "gh-action@example.com"
           git config --global user.name "GitHub Action"
+          # Shallow sync to save time and bandwidth
           ~/bin/repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb.git -b android-12.1 --depth=1
           ~/bin/repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Clone Fixed Device Tree
         run: |
+          # Cloning your fixed branch into the correct build path
           git clone https://github.com/anjal2940-lab/M14x-stock-device-tree-Recovery- -b standardized-tree pbrp/device/samsung/m14x
 
       - name: Setup CCache
@@ -67,8 +75,17 @@ jobs:
           lunch pbrp_m14x-eng
           mka recoveryimage -j$(nproc --all)
 
+      - name: Package for Odin
+        if: success()
+        run: |
+          cd pbrp/out/target/product/m14x/
+          tar -cvf PBRP_M14_5G.tar recovery.img
+
       - name: Upload Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: PBRP-M14x-Recovery
-          path: pbrp/out/target/product/m14x/recovery.img
+          name: PBRP-M14x-Final
+          path: |
+            pbrp/out/target/product/m14x/recovery.img
+            pbrp/out/target/product/m14x/PBRP_M14_5G.tar
