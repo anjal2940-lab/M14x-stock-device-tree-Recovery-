@@ -5,8 +5,7 @@ on:
 
 jobs:
   build:
-    # Switched to 20.04 for better compatibility with Android 12.1 build tools
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest  # Now using 24.04
     permissions:
       contents: write
     steps:
@@ -18,11 +17,15 @@ jobs:
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          # Updated package names for Ubuntu 24.04 compatibility
           sudo apt-get install -y \
             gperf gcc-multilib g++-multilib libc6-dev-i386 \
-            lib32ncurses5-dev x11proto-core-dev libx11-dev \
-            lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc \
-            unzip bc ccache python3 python-is-python3
+            lib32z1-dev libncurses5-dev libncurses5:i386 \
+            x11proto-core-dev libx11-dev libgl1-mesa-dev \
+            libxml2-utils xsltproc unzip bc ccache \
+            python3 python-is-python3
           
       - name: Install Repo
         run: |
@@ -37,21 +40,18 @@ jobs:
           cd pbrp
           git config --global user.email "gh-action@example.com"
           git config --global user.name "GitHub Action"
-          # Shallow sync to save time and space
           ~/bin/repo init -u https://github.com/PitchBlackRecoveryProject/manifest_pb.git -b android-12.1 --depth=1
           ~/bin/repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Clone Fixed Device Tree
         run: |
-          # Cloning directly into the correct path
           git clone https://github.com/anjal2940-lab/M14x-stock-device-tree-Recovery- -b standardized-tree pbrp/device/samsung/m14x
 
       - name: Setup CCache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          # Key includes the branch and a hash of the device tree to trigger updates
-          key: ccache-${{ github.ref_name }}-${{ hashFiles('pbrp/device/samsung/m14x/*.mk') }}
+          key: ccache-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.ref_name }}-
             ccache-
@@ -63,12 +63,11 @@ jobs:
           export CCACHE_EXEC=/usr/bin/ccache
           ccache -M 10G
           export ALLOW_MISSING_DEPENDENCIES=true
-          # Standard AOSP build commands
           source build/envsetup.sh
           lunch pbrp_m14x-eng
           mka recoveryimage -j$(nproc --all)
 
-      - name: Upload Build
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: PBRP-M14x-Recovery
