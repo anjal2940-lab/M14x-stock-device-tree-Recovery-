@@ -23,12 +23,6 @@ on:
         description: 'DEVICE_PATH'
         required: true
         default: 'device/samsung/m14x'
-      COMMON_TREE_URL:
-        description: 'COMMON_TREE_URL (leave blank for m14x)'
-        required: false
-      COMMON_PATH:
-        description: 'COMMON_PATH (leave blank for m14x)'
-        required: false
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
@@ -72,7 +66,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt install git aria2 -y
-        # Manual link for python support to avoid 'Unable to locate package'
+        # Manual link for python support
         sudo ln -sf /usr/bin/python3 /usr/bin/python
         mkdir ofx_scripts
         cd ofx_scripts
@@ -118,7 +112,21 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        
+        # FIX: Remove the conflicting root folders that cause the rsync/symlink error
+        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/root
+        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root
+        
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
+        # Removed 'make clean' to allow the build to finish the last 1%
+        make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Create Odin Tar
+      if: success()
+      run: |
+        cd out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        tar -cvf PBRP_M14x_Odin.tar recovery.img
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Upload to Release
@@ -126,12 +134,14 @@ jobs:
       with:
         files: | 
           workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/PBRP_M14x_Odin.tar
           workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
         name: PBRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+          PBRP Recovery for Samsung Galaxy M14 5G
+          - Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          - Device: ${{ github.event.inputs.DEVICE_NAME }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
