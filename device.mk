@@ -1,25 +1,28 @@
 LOCAL_PATH := device/samsung/m14x
 
-# Enable updating of the partition table
+# Inherit from generic recovery
+$(call inherit-product, $(SRC_TARGET_DIR)/product/generic_system.mk)
+
+# Enable project path config
+PRODUCT_SHIPPING_API_LEVEL := 31
 PRODUCT_USE_DYNAMIC_PARTITIONS := true
 
 # PBRP / TWRP localized recovery resources
 PRODUCT_PACKAGES += \
-    libpuresoftkey \
-    libkeymaster4 \
-    libkeymaster41
+    libpuresoftkey
 
-# Copy recovery.fstab to the ramdisk
-# Samsung devices look for the fstab in both /system/etc and /etc
+# Install recovery fstab
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/etc/recovery.fstab
 
-# Copy the prebuilt Kernel and DTBO
-# Note: Ensure these file names match what is in your 'prebuilt' folder
+# Copy the prebuilt Kernel, DTBO, and DTB (Matched to your prebuilt folder)
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kernel:kernel \
-    $(LOCAL_PATH)/prebuilt/dtbo.img:dtbo.img
+    $(LOCAL_PATH)/prebuilt/dtbo.img:dtbo.img \
+    $(LOCAL_PATH)/prebuilt/dtb/dtb.img:dtb
 
-# Inherit from generic recovery
-$(call inherit-product, $(SRC_TARGET_DIR)/product/generic_system.mk)
+# PBRP Specific Properties
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.pbrp.device=m14x \
+    ro.pbrp.maintainer=Ansh_m14x
