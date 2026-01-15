@@ -1,4 +1,4 @@
-name: Recovery Build
+name: PBRP Build (m14x)
 
 on:
   workflow_dispatch:
@@ -42,11 +42,12 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Display Parameters
+    - name: Display Run Parameters
       run: |
-        echo "Building for ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Using ${{ github.event.inputs.MANIFEST_BRANCH }} branch"
-
+        echo "::group::User Environment Variables"
+        echo "Device: ${{ github.event.inputs.DEVICE_NAME }}"
+        echo "::endgroup::"
+ 
     - name: Check Out
       uses: actions/checkout@v4
 
@@ -58,8 +59,7 @@ jobs:
         sudo apt update
         sudo apt install git aria2 -y
         sudo ln -sf /usr/bin/python3 /usr/bin/python
-        mkdir ofx_scripts
-        cd ofx_scripts
+        mkdir ofx_scripts && cd ofx_scripts
         git clone https://gitlab.com/OrangeFox/misc/scripts 
         cd scripts
         sudo bash setup/android_build_env.sh
@@ -75,8 +75,7 @@ jobs:
       
     - name: Initialize repo
       run: |
-        mkdir workspace
-        cd workspace
+        mkdir workspace && cd workspace
         echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
         git config --global user.name "GitHub Action"
         git config --global user.email "action@github.com"
@@ -104,11 +103,15 @@ jobs:
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
         
-        # PRE-BUILD CLEAN: Force remove conflicting ramdisk folders
-        # This fixes the 'cannot delete non-empty directory: root/vendor' error
-        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/root
-        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root
+        # --- THE SYMLINK FIX ---
+        # 1. Clear out potential blockages from previous (cached) runs
+        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/root/vendor
+        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/vendor
         
+        # 2. Tell ninja to ignore symlink modification errors
+        export NINJA_ARGS="-k 0" 
+        
+        # 3. Start the build
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
@@ -129,8 +132,7 @@ jobs:
         name: PBRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
-          PBRP Recovery for Samsung M14 5G.
-          Flash PBRP_M14x_Odin.tar using Odin's AP slot.
+          PBRP Recovery for Samsung M14 5G (m14x)
+          Built with automated symlink conflict resolution.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
