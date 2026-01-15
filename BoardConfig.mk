@@ -88,5 +88,5 @@ TARGET_COPY_OUT_VENDOR := vendor
 BOARD_USES_VENDOR_BOOT := false
 
 # PBRP Official/Maintainer Flags
-PB_MAINTAINER :=Ansh_m14x
+PB_MAINTAINER :="Ansh_m14x"
 PB_OFFICIAL := false
