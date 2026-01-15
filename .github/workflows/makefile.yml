@@ -38,35 +38,25 @@ on:
 
 jobs:
   build:
-    if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
-    - name: Display Run Parameters
+    - name: Display Parameters
       run: |
-        echo "::group::User Environment Variables"
-        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
-        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
-        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
-        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
-        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
-        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
-        echo "::endgroup::"
- 
+        echo "Building for ${{ github.event.inputs.DEVICE_NAME }}"
+        echo "Using ${{ github.event.inputs.MANIFEST_BRANCH }} branch"
+
     - name: Check Out
       uses: actions/checkout@v4
 
-    - name: Cleanup
+    - name: Cleanup Runner
       uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Prepare the environment
+    - name: Prepare Environment
       run: |
         sudo apt update
         sudo apt install git aria2 -y
-        # Manual link for python support
         sudo ln -sf /usr/bin/python3 /usr/bin/python
         mkdir ofx_scripts
         cd ofx_scripts
@@ -112,13 +102,13 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
         
-        # FIX: Remove the conflicting root folders that cause the rsync/symlink error
+        # PRE-BUILD CLEAN: Force remove conflicting ramdisk folders
+        # This fixes the 'cannot delete non-empty directory: root/vendor' error
         rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/root
         rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root
         
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
-        # Removed 'make clean' to allow the build to finish the last 1%
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
@@ -133,15 +123,14 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: | 
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img
           workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/PBRP_M14x_Odin.tar
           workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
         name: PBRP-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
-          PBRP Recovery for Samsung Galaxy M14 5G
-          - Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          - Device: ${{ github.event.inputs.DEVICE_NAME }}
+          PBRP Recovery for Samsung M14 5G.
+          Flash PBRP_M14x_Odin.tar using Odin's AP slot.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
