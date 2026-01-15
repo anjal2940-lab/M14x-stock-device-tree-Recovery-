@@ -45,7 +45,7 @@ BOARD_HAS_LARGE_FILESYSTEM := true
 BOARD_SUPER_PARTITION_SIZE := 9126805504
 BOARD_SUPER_PARTITION_GROUPS := samsung_dynamic_partitions
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE := 9122611200
-BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext
+BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext vendor_dlkm system_dlkm
 
 # Verified Boot (AVB) 
 BOARD_AVB_ENABLE := true
@@ -58,11 +58,15 @@ BOARD_AVB_RECOVERY_ROLLBACK_INDEX_LOCATION := 1
 # Recovery Partition Logic
 BOARD_USES_RECOVERY_AS_BOOT := false
 TARGET_NO_RECOVERY := false
+# --- THIS IS THE LINE YOU ASKED FOR ---
+TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
 
-# Recovery UI & Theme
+# Recovery UI & Theme Settings
 TW_THEME := portrait_hdpi
 DEVICE_SCREEN_WIDTH := 1080
-DEVICE_SCREEN_HEIGHT := 2408
+DEVICE_SCREEN_HEIGHT := 1920
+TW_STATUS_ICONS_ALIGN := center
+TW_CUSTOM_CPU_TEMP_PATH := /sys/class/thermal/thermal_zone0/temp
 TW_BRIGHTNESS_PATH := "/sys/class/backlight/panel/brightness"
 TW_MAX_BRIGHTNESS := 255
 BOARD_HAS_NO_SELECT_BUTTON := true
@@ -77,6 +81,8 @@ TARGET_USERIMAGES_USE_F2FS := true
 PB_RECOVERY_DEVICE := m14x
 PB_RECOVERY_VENDOR := samsung
 PB_BUILD_VBMETA_IMAGE := true
+PB_MAINTAINER := "Ansh_m14x"
+PB_OFFICIAL := false
 
 # Samsung Hardware HALs & Extras
 BOARD_VENDOR := samsung
@@ -86,7 +92,3 @@ RECOVERY_SDCARD_ON_DATA := true
 # Fix for the root/vendor symlink issue at the source level
 TARGET_COPY_OUT_VENDOR := vendor
 BOARD_USES_VENDOR_BOOT := false
-
-# PBRP Official/Maintainer Flags
-PB_MAINTAINER :="Ansh_m14x"
-PB_OFFICIAL := false
