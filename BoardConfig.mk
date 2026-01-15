@@ -19,11 +19,14 @@ TARGET_BOOTLOADER_BOARD_NAME := s5e8535
 TARGET_NO_BOOTLOADER := true
 TARGET_USES_UEFI := true
 
-# Kernel - Prebuilt Paths (Matched to your GitHub folders)
+# Kernel - Prebuilt Paths
 TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel
 BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/prebuilt/dtbo.img
 TARGET_PREBUILT_DTB := $(DEVICE_PATH)/prebuilt/dtb/dtb.img
-BOARD_INCLUDE_RECOVERY_DTBO := true
+
+# FIX: Set to false to prevent "overriding commands" error with prebuilt DTBO
+BOARD_INCLUDE_RECOVERY_DTBO := false
+BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 # Kernel - Offsets & CMDLINE
 BOARD_BOOT_HEADER_VERSION := 2
@@ -56,7 +59,6 @@ BOARD_HAS_LARGE_FILESYSTEM := true
 BOARD_SUPER_PARTITION_SIZE := 8287944704
 BOARD_SUPER_PARTITION_GROUPS := samsung_dynamic_partitions
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE := 8283750400
-# Added system_ext to prevent previous 'invalid partition' error
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext vendor_dlkm
 
 # Recovery Logic
@@ -88,7 +90,7 @@ TW_H_OFFSET := -80
 TW_FRAMERATE := 90
 BOARD_HAS_NO_SELECT_BUTTON := true
 
-# Encryption (Initial test build set to false for stability)
+# Encryption (Disabled for initial stability)
 TW_INCLUDE_CRYPTO := false
 TW_INCLUDE_FBE := false
 
