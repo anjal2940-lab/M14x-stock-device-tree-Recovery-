@@ -77,3 +77,16 @@ TARGET_USERIMAGES_USE_F2FS := true
 PB_RECOVERY_DEVICE := m14x
 PB_RECOVERY_VENDOR := samsung
 PB_BUILD_VBMETA_IMAGE := true
+
+# Samsung Hardware HALs & Extras
+BOARD_VENDOR := samsung
+BOARD_USES_SAMSUNG_HARDWARE := true
+RECOVERY_SDCARD_ON_DATA := true
+
+# Fix for the root/vendor symlink issue at the source level
+TARGET_COPY_OUT_VENDOR := vendor
+BOARD_USES_VENDOR_BOOT := false
+
+# PBRP Official/Maintainer Flags
+PB_MAINTAINER :=Ansh_m14x
+PB_OFFICIAL := false
