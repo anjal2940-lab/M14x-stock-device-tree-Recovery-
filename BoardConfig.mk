@@ -7,34 +7,46 @@ ALLOW_MISSING_DEPENDENCIES := true
 TARGET_ARCH := arm64
 TARGET_ARCH_VARIANT := armv8-a
 TARGET_CPU_ABI := arm64-v8a
-TARGET_CPU_VARIANT := generic
+TARGET_CPU_VARIANT := cortex-a53
 TARGET_2ND_ARCH := arm
-TARGET_2ND_ARCH_VARIANT := armv7-a-neon
+TARGET_2ND_ARCH_VARIANT := armv8-a
 TARGET_2ND_CPU_ABI := armeabi-v7a
+TARGET_USES_64_BIT_BINDER := true
 
 # Platform
-TARGET_BOARD_PLATFORM := s5e8535
+TARGET_BOARD_PLATFORM := universal8535
 TARGET_BOOTLOADER_BOARD_NAME := s5e8535
-BOARD_HAS_REMOVABLE_STORAGE := true
-
-# Kernel - Header and Offsets
-BOARD_BOOTIMG_HEADER_VERSION := 2
-BOARD_KERNEL_BASE := 0x10000000
-BOARD_KERNEL_PAGESIZE := 4096
-BOARD_RAMDISK_OFFSET := 0x00000000
-BOARD_KERNEL_TAGS_OFFSET := 0x00000000
+TARGET_NO_BOOTLOADER := true
+TARGET_USES_UEFI := true
 
 # Kernel - Prebuilt Paths
-TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel
-BOARD_PREBUILT_DTBIMAGE_DIR := $(DEVICE_PATH)/prebuilt/dtb
-BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/prebuilt/dtbo.img
-BOARD_INCLUDE_DTB_IN_BOOTIMG := true
+# Ensure these filenames match your 'prebuilt' folder exactly
+TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/Image
+BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/prebuilt/recovery_dtbo
+TARGET_PREBUILT_DTB := $(DEVICE_PATH)/prebuilt/dtb
 BOARD_INCLUDE_RECOVERY_DTBO := true
 
-# Boot Image Arguments
-BOARD_MKBOOTIMG_ARGS := --header_version $(BOARD_BOOTIMG_HEADER_VERSION)
-BOARD_MKBOOTIMG_ARGS += --ramdisk_offset $(BOARD_RAMDISK_OFFSET)
-BOARD_MKBOOTIMG_ARGS += --tags_offset $(BOARD_KERNEL_TAGS_OFFSET)
+# Kernel - Offsets & CMDLINE
+BOARD_BOOT_HEADER_VERSION := 2
+BOARD_KERNEL_BASE := 0x10000000
+BOARD_KERNEL_PAGESIZE := 4096
+BOARD_KERNEL_OFFSET := 0x00008000
+BOARD_RAMDISK_OFFSET := 0x00000000
+BOARD_KERNEL_SECOND_OFFSET := 0xf0000000
+BOARD_KERNEL_TAGS_OFFSET := 0x00000000
+BOARD_DTB_OFFSET := 0x00000000
+
+BOARD_KERNEL_CMDLINE := androidboot.selinux=permissive bootconfig buildtime_bootconfig=enable loop.max_part=7
+
+BOARD_MKBOOTIMG_ARGS := --kernel_offset $(BOARD_KERNEL_OFFSET) 
+BOARD_MKBOOTIMG_ARGS += --ramdisk_offset $(BOARD_RAMDISK_OFFSET) 
+BOARD_MKBOOTIMG_ARGS += --tags_offset $(BOARD_KERNEL_TAGS_OFFSET) 
+BOARD_MKBOOTIMG_ARGS += --second_offset $(BOARD_KERNEL_SECOND_OFFSET)
+BOARD_MKBOOTIMG_ARGS += --header_version $(BOARD_BOOT_HEADER_VERSION) 
+BOARD_MKBOOTIMG_ARGS += --pagesize $(BOARD_KERNEL_PAGESIZE) 
+BOARD_MKBOOTIMG_ARGS += --board "SRPVJ19A001"
+BOARD_MKBOOTIMG_ARGS += --dtb $(TARGET_PREBUILT_DTB) 
+BOARD_MKBOOTIMG_ARGS += --dtb_offset $(BOARD_DTB_OFFSET)
 
 # Partitions
 BOARD_FLASH_BLOCK_SIZE := 262144
@@ -42,12 +54,22 @@ BOARD_RECOVERYIMAGE_PARTITION_SIZE := 100663296
 BOARD_HAS_LARGE_FILESYSTEM := true
 
 # Dynamic Partitions
-BOARD_SUPER_PARTITION_SIZE := 9126805504
+BOARD_SUPER_PARTITION_SIZE := 8287944704
 BOARD_SUPER_PARTITION_GROUPS := samsung_dynamic_partitions
-BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE := 9122611200
-BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext vendor_dlkm system_dlkm
+BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE := 8283750400
+# Included system_ext to prevent the previous 'invalid partition' error
+BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext vendor_dlkm
 
-# Verified Boot (AVB) 
+# Recovery Logic
+BOARD_USES_RECOVERY_AS_BOOT := false
+TARGET_NO_RECOVERY := false
+TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
+BOARD_SUPPRESS_SECURE_ERASE := true
+
+# Samsung Root Folders
+BOARD_ROOT_EXTRA_FOLDERS := carrier efs metadata optics prism system_ext vendor_dlkm
+
+# Android Verified Boot
 BOARD_AVB_ENABLE := true
 BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --flags 3
 BOARD_AVB_RECOVERY_KEY_PATH := external/avb/test/data/testkey_rsa4096.pem
@@ -55,40 +77,27 @@ BOARD_AVB_RECOVERY_ALGORITHM := SHA256_RSA4096
 BOARD_AVB_RECOVERY_ROLLBACK_INDEX := 1
 BOARD_AVB_RECOVERY_ROLLBACK_INDEX_LOCATION := 1
 
-# Recovery Partition Logic
-BOARD_USES_RECOVERY_AS_BOOT := false
-TARGET_NO_RECOVERY := false
-# --- THIS IS THE LINE YOU ASKED FOR ---
-TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
-
-# Recovery UI & Theme Settings
+# PBRP UI & Theme Settings
 TW_THEME := portrait_hdpi
 DEVICE_SCREEN_WIDTH := 1080
 DEVICE_SCREEN_HEIGHT := 1920
-TW_STATUS_ICONS_ALIGN := center
-TW_CUSTOM_CPU_TEMP_PATH := /sys/class/thermal/thermal_zone0/temp
 TW_BRIGHTNESS_PATH := "/sys/class/backlight/panel/brightness"
-TW_MAX_BRIGHTNESS := 255
+TW_MAX_BRIGHTNESS := 612
+TW_DEFAULT_BRIGHTNESS := 255
+TW_Y_OFFSET := 80
+TW_H_OFFSET := -80
+TW_FRAMERATE := 90
 BOARD_HAS_NO_SELECT_BUTTON := true
 
-# Encryption & Storage
-TW_INCLUDE_CRYPTO := true
-TW_INCLUDE_FBE := true
-TARGET_USERIMAGES_USE_EXT4 := true
-TARGET_USERIMAGES_USE_F2FS := true
+# Encryption (Set to false for initial successful boot test)
+TW_INCLUDE_CRYPTO := false
+TW_INCLUDE_FBE := false
 
-# PitchBlack Recovery Project Flags
+# PBRP Flags
 PB_RECOVERY_DEVICE := m14x
 PB_RECOVERY_VENDOR := samsung
-PB_BUILD_VBMETA_IMAGE := true
 PB_MAINTAINER := "Ansh_m14x"
 PB_OFFICIAL := false
 
-# Samsung Hardware HALs & Extras
-BOARD_VENDOR := samsung
-BOARD_USES_SAMSUNG_HARDWARE := true
-RECOVERY_SDCARD_ON_DATA := true
-
-# Fix for the root/vendor symlink issue at the source level
+# Fix for the root/vendor symlink conflict
 TARGET_COPY_OUT_VENDOR := vendor
-BOARD_USES_VENDOR_BOOT := false
