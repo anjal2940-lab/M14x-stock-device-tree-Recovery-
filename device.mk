@@ -16,7 +16,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/etc/recovery.fstab
 
-# Copy the prebuilt Kernel, DTBO, and DTB
+# Manual copy of prebuilt files - This bypasses the automatic DTBO rule conflict
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kernel:kernel \
     $(LOCAL_PATH)/prebuilt/dtbo.img:dtbo.img \
