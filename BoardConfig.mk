@@ -21,11 +21,11 @@ TARGET_USES_UEFI := true
 
 # Kernel - Prebuilt Paths
 TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel
-BOARD_PREBUILT_DTBOIMAGE := $(DEVICE_PATH)/prebuilt/dtbo.img
+# We removed BOARD_PREBUILT_DTBOIMAGE from here to fix the override error
 TARGET_PREBUILT_DTB := $(DEVICE_PATH)/prebuilt/dtb/dtb.img
 
-# FIX: Set to false to prevent "overriding commands" error with prebuilt DTBO
-BOARD_INCLUDE_RECOVERY_DTBO := false
+BOARD_USES_RECOVERY_AS_BOOT := false
+BOARD_INCLUDE_RECOVERY_DTBO := 
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 # Kernel - Offsets & CMDLINE
@@ -62,7 +62,6 @@ BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE := 8283750400
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm system_ext vendor_dlkm
 
 # Recovery Logic
-BOARD_USES_RECOVERY_AS_BOOT := false
 TARGET_NO_RECOVERY := false
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
 BOARD_SUPPRESS_SECURE_ERASE := true
@@ -90,7 +89,7 @@ TW_H_OFFSET := -80
 TW_FRAMERATE := 90
 BOARD_HAS_NO_SELECT_BUTTON := true
 
-# Encryption (Disabled for initial stability)
+# Encryption
 TW_INCLUDE_CRYPTO := false
 TW_INCLUDE_FBE := false
 
@@ -100,5 +99,5 @@ PB_RECOVERY_VENDOR := samsung
 PB_MAINTAINER := "Ansh_m14x"
 PB_OFFICIAL := false
 
-# Fix for the root/vendor symlink conflict
 TARGET_COPY_OUT_VENDOR := vendor
+
