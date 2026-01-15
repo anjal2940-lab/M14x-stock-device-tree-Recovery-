@@ -1,0 +1,64 @@
+name: PBRP Recovery Build (m14x) - Guard Edition
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cleanup Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip bc
+          sudo rm -rf /usr/share/dotnet /etc/mysql /usr/local/lib/android
+          docker image prune -a -f
+
+      - name: Install Repo Tool
+        run: |
+          mkdir ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+
+      - name: Initialize PBRP Source
+        run: |
+          mkdir pbrp
+          cd pbrp
+          repo init --depth=1 -u https://github.com/PitchBlackRecoveryProject/manifest_pb.git -b android-12.1
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Clone Device Tree
+        run: |
+          cd pbrp
+          git clone https://github.com/anjal2940-lab/device-samsung-m14x.git -b standardized-tree device/samsung/m14x
+
+      - name: Start Background Guard
+        run: |
+          echo "Starting background guard to prevent vendor symlink conflict..."
+          while true; do
+            if [ -d "pbrp/out/target/product/m14x/recovery/root/vendor" ]; then
+              echo "Guard: Conflict detected! Deleting pbrp/out/target/product/m14x/recovery/root/vendor"
+              rm -rf pbrp/out/target/product/m14x/recovery/root/vendor
+            fi
+            sleep 2
+          done &
+
+      - name: Build PBRP
+        run: |
+          cd pbrp
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch pbrp_m14x-eng
+          mka recoveryimage -j$(nproc --all)
+
+      - name: Upload Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: PBRP-m14x-Final
+          path: |
+            pbrp/out/target/product/m14x/recovery.img
+            pbrp/out/target/product/m14x/*.tar
