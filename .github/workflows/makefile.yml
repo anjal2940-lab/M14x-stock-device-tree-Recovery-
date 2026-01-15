@@ -1,4 +1,4 @@
-name: PBRP Build (m14x)
+name: PBRP Recovery Build (m14x) - Guard Edition
 
 on:
   workflow_dispatch:
@@ -103,16 +103,27 @@ jobs:
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
         
-        # --- THE SYMLINK FIX ---
-        # 1. Clear out potential blockages from previous (cached) runs
-        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/root/vendor
-        rm -rf out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/vendor
+        # 1. Clean up potential blockages from the start
+        make clean-recoveryimage
         
-        # 2. Tell ninja to ignore symlink modification errors
-        export NINJA_ARGS="-k 0" 
+        # 2. START THE BACKGROUND GUARD
+        # This loop monitors the output folder every 2 seconds.
+        # It deletes 'vendor' only if it is a directory, NOT if it's a symlink.
+        (while true; do 
+            VENDOR_PATH="out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/vendor"
+            if [ -d "$VENDOR_PATH" ] && [ ! -L "$VENDOR_PATH" ]; then
+                echo "Guard: Found physical vendor directory. Deleting to make way for symlink..."
+                rm -rf "$VENDOR_PATH"
+            fi
+            sleep 2
+        done) &
+        GUARD_PID=$!
         
-        # 3. Start the build
+        # 3. Start the actual build
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        
+        # 4. Kill the guard once build is finished
+        kill $GUARD_PID || true
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Create Odin Tar
@@ -133,6 +144,7 @@ jobs:
         tag_name: ${{ github.run_id }}
         body: |
           PBRP Recovery for Samsung M14 5G (m14x)
-          Built with automated symlink conflict resolution.
+          Built with Background Guard to resolve rsync Code 23 symlink conflicts.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
