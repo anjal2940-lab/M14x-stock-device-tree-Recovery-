@@ -16,7 +16,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/etc/recovery.fstab
 
-# Manual copy of prebuilt files - This bypasses the automatic DTBO rule conflict
+# MANUAL COPY: This method bypasses the Makefile conflicts for Kernel/DTBO/DTB
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kernel:kernel \
     $(LOCAL_PATH)/prebuilt/dtbo.img:dtbo.img \
@@ -26,3 +26,4 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.pbrp.device=m14x \
     ro.pbrp.maintainer=Ansh_m14x
+
