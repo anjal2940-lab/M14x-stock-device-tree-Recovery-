@@ -19,13 +19,15 @@ TARGET_BOOTLOADER_BOARD_NAME := s5e8535
 TARGET_NO_BOOTLOADER := true
 TARGET_USES_UEFI := true
 
-# Kernel - Prebuilt Paths
-TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel
-# We removed BOARD_PREBUILT_DTBOIMAGE from here to fix the override error
-TARGET_PREBUILT_DTB := $(DEVICE_PATH)/prebuilt/dtb/dtb.img
+# Kernel - Prebuilt Configuration
+# We leave these empty to prevent the "overriding commands" error.
+# The files are handled manually in device.mk.
+TARGET_PREBUILT_KERNEL := 
+BOARD_PREBUILT_DTBOIMAGE := 
+TARGET_PREBUILT_DTB := 
 
-BOARD_USES_RECOVERY_AS_BOOT := false
 BOARD_INCLUDE_RECOVERY_DTBO := 
+BOARD_USES_RECOVERY_AS_BOOT := false
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
 
 # Kernel - Offsets & CMDLINE
@@ -47,7 +49,7 @@ BOARD_MKBOOTIMG_ARGS += --second_offset $(BOARD_KERNEL_SECOND_OFFSET)
 BOARD_MKBOOTIMG_ARGS += --header_version $(BOARD_BOOT_HEADER_VERSION) 
 BOARD_MKBOOTIMG_ARGS += --pagesize $(BOARD_KERNEL_PAGESIZE) 
 BOARD_MKBOOTIMG_ARGS += --board "SRPVJ19A001"
-BOARD_MKBOOTIMG_ARGS += --dtb $(TARGET_PREBUILT_DTB) 
+BOARD_MKBOOTIMG_ARGS += --dtb $(DEVICE_PATH)/prebuilt/dtb/dtb.img
 BOARD_MKBOOTIMG_ARGS += --dtb_offset $(BOARD_DTB_OFFSET)
 
 # Partitions
@@ -100,4 +102,3 @@ PB_MAINTAINER := "Ansh_m14x"
 PB_OFFICIAL := false
 
 TARGET_COPY_OUT_VENDOR := vendor
-
