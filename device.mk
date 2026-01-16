@@ -26,4 +26,3 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.pbrp.device=m14x \
     ro.pbrp.maintainer=Ansh_m14x
-
