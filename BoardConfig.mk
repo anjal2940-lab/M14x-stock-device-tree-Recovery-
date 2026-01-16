@@ -19,13 +19,13 @@ TARGET_BOOTLOADER_BOARD_NAME := s5e8535
 TARGET_NO_BOOTLOADER := true
 TARGET_USES_UEFI := true
 
-# Kernel - Prebuilt Configuration
-# We leave these empty to prevent the "overriding commands" error.
-# The files are handled manually in device.mk.
+# Kernel - Prebuilt Configuration (Silenced for Manual Copy)
 TARGET_PREBUILT_KERNEL := 
 BOARD_PREBUILT_DTBOIMAGE := 
 TARGET_PREBUILT_DTB := 
 
+# Kernel - PBRP/TWRP Compatibility Fixes
+BOARD_KERNEL_IMAGE_NAME := kernel
 BOARD_INCLUDE_RECOVERY_DTBO := 
 BOARD_USES_RECOVERY_AS_BOOT := false
 BOARD_INCLUDE_DTB_IN_BOOTIMG := true
@@ -102,3 +102,4 @@ PB_MAINTAINER := "Ansh_m14x"
 PB_OFFICIAL := false
 
 TARGET_COPY_OUT_VENDOR := vendor
+
