@@ -16,11 +16,11 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab \
     $(LOCAL_PATH)/recovery.fstab:recovery/root/etc/recovery.fstab
 
-# MANUAL COPY: This method bypasses the Makefile conflicts for Kernel/DTBO/DTB
+# MANUAL COPY: Updated to look inside prebuilt/dtb/ folder
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/kernel:kernel \
     $(LOCAL_PATH)/prebuilt/dtbo.img:dtbo.img \
-    $(LOCAL_PATH)/prebuilt/dtb/dtb.img:dtb
+    $(LOCAL_PATH)/prebuilt/dtb/dtb.img:dtb.img
 
 # PBRP Specific Properties
 PRODUCT_PRODUCT_PROPERTIES += \
