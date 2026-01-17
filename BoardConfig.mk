@@ -49,7 +49,8 @@ BOARD_MKBOOTIMG_ARGS += --second_offset $(BOARD_KERNEL_SECOND_OFFSET)
 BOARD_MKBOOTIMG_ARGS += --header_version $(BOARD_BOOT_HEADER_VERSION) 
 BOARD_MKBOOTIMG_ARGS += --pagesize $(BOARD_KERNEL_PAGESIZE) 
 BOARD_MKBOOTIMG_ARGS += --board "SRPVJ19A001"
-BOARD_MKBOOTIMG_ARGS += --dtb $(DEVICE_PATH)/prebuilt/dtb/dtb.img
+# Fixed: Pointing to the generated file Ninja is looking for
+BOARD_MKBOOTIMG_ARGS += --dtb out/target/product/m14x/dtb.img
 BOARD_MKBOOTIMG_ARGS += --dtb_offset $(BOARD_DTB_OFFSET)
 
 # Partitions
@@ -102,4 +103,3 @@ PB_MAINTAINER := "Ansh_m14x"
 PB_OFFICIAL := false
 
 TARGET_COPY_OUT_VENDOR := vendor
-
